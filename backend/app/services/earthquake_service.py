@@ -21,7 +21,7 @@ def fetch_earthquakes():
                 "depth": geometry["coordinates"][2]
             })
 
-            return earth_quakes
+        return earth_quakes
         
     except Exception as e:
         print("Error fetching data!")
