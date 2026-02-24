@@ -1,7 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import MapView from './components/map/MapView';
 import AlertCard from './components/alerts/AlertCard';
 import { fetchDisasterData } from './services/api';
+
+const getDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 
 function App() {
   const [events, setEvents] = useState([]);
@@ -10,6 +22,18 @@ function App() {
   const [userLon, setUserLon] = useState(null);
   const [radius, setRadius] = useState(2500); // Default 2500km
   const [locationError, setLocationError] = useState(null);
+
+  // Refs for real-time filtering without triggering re-connections
+  const userLatRef = useRef(userLat);
+  const userLonRef = useRef(userLon);
+  const radiusRef = useRef(radius);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    userLatRef.current = userLat;
+    userLonRef.current = userLon;
+    radiusRef.current = radius;
+  }, [userLat, userLon, radius]);
 
   useEffect(() => {
     // Get user location
@@ -33,24 +57,53 @@ function App() {
     }
   }, []);
 
-  const fetchData = async (lat, lon, rad) => {
+  // Handle manual location selection via map interactions
+  const handleLocationChange = (lat, lon) => {
+    setUserLat(lat);
+    setUserLon(lon);
+    userLatRef.current = lat;
+    userLonRef.current = lon;
+
+    // Re-calculate distances and sort without fetching global data again
+    setEvents(prevEvents => {
+      const updated = prevEvents.map(eq => ({
+        ...eq,
+        distance_km: getDistance(lat, lon, eq.latitude, eq.longitude).toFixed(2)
+      }));
+      // Sort by distance
+      return [...updated].sort((a, b) => parseFloat(a.distance_km) - parseFloat(b.distance_km));
+    });
+  };
+
+  const fetchData = async () => {
     setLoading(true);
-    const data = await fetchDisasterData(lat, lon, lat && lon ? rad : null);
+    // Always fetch global data to ensure we have something to show
+    const data = await fetchDisasterData(null, null, null);
     if (data && data.events) {
-      setEvents(data.events);
+      // If we have user location, calculate distance and sort
+      if (userLatRef.current && userLonRef.current) {
+        const globalEvents = data.events.map(eq => ({
+          ...eq,
+          distance_km: getDistance(userLatRef.current, userLonRef.current, eq.latitude, eq.longitude).toFixed(2)
+        }));
+
+        setEvents(globalEvents);
+      } else {
+        setEvents(data.events);
+      }
     }
     setLoading(false);
   };
 
   useEffect(() => {
-    if (userLat !== null && userLon !== null) {
-      fetchData(userLat, userLon, radius);
-    }
-  }, [userLat, userLon, radius]);
+    fetchData();
+  }, [userLat, userLon]); // Re-fetch or re-calculate when location changes
 
   // WebSocket for Real-time Updates
   useEffect(() => {
-    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws';
+    // Derive WS URL from API URL so we don't need to configure both ports
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const wsUrl = import.meta.env.VITE_WS_URL || apiUrl.replace('http', 'ws') + '/ws';
     const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
@@ -60,27 +113,25 @@ function App() {
     socket.onmessage = (event) => {
       try {
         const fullData = JSON.parse(event.data);
+        const currentLat = userLatRef.current;
+        const currentLon = userLonRef.current;
+        const currentRadius = radiusRef.current;
 
         let filtered = fullData;
-        if (userLat && userLon) {
-          const getDistance = (lat1, lon1, lat2, lon2) => {
-            const R = 6371; // km
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a =
-              Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c;
-          };
-
+        if (currentLat && currentLon) {
           filtered = fullData.map(eq => {
-            const dist = getDistance(userLat, userLon, eq.latitude, eq.longitude);
+            const dist = getDistance(currentLat, currentLon, eq.latitude, eq.longitude);
             return { ...eq, distance_km: dist.toFixed(2) };
-          }).filter(eq => eq.distance_km <= radius);
+          });
 
-          filtered.sort((a, b) => b.time - a.time);
+          // Sort by distance if they are within or near radius, otherwise by time
+          filtered.sort((a, b) => {
+            const aInRadius = a.distance_km <= currentRadius;
+            const bInRadius = b.distance_km <= currentRadius;
+            if (aInRadius && !bInRadius) return -1;
+            if (!aInRadius && bInRadius) return 1;
+            return b.time - a.time;
+          });
         } else {
           filtered.sort((a, b) => b.time - a.time);
         }
@@ -92,9 +143,11 @@ function App() {
     };
 
     return () => {
-      socket.close();
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+        socket.close();
+      }
     };
-  }, [userLat, userLon, radius]);
+  }, []); // Only run once on mount
 
   const handleRadiusChange = (e) => {
     setRadius(Number(e.target.value));
@@ -110,8 +163,8 @@ function App() {
         <aside className="sidebar">
           <div className="sidebar-header">
             <h2>Recent Alerts</h2>
-            <p>{events.length} active events detected</p>
-            {locationError && <p style={{ color: '#fca5a5', marginTop: '4px', fontSize: '0.75rem' }}>{locationError}</p>}
+            <p>{events.length} active events detected (last 24h)</p>
+            {locationError && <p style={{ color: '#ef4444', marginTop: '4px', fontSize: '0.75rem' }}>{locationError}</p>}
 
             <div className="radius-control">
               <div className="radius-header">
@@ -145,7 +198,11 @@ function App() {
               </div>
             ) : (
               events.map((event, idx) => (
-                <AlertCard key={idx} event={event} />
+                <AlertCard
+                  key={idx}
+                  event={event}
+                  onClick={(e) => handleLocationChange(e.latitude, e.longitude)}
+                />
               ))
             )}
           </div>
@@ -157,6 +214,7 @@ function App() {
             userLat={userLat}
             userLon={userLon}
             radius={radius}
+            onLocationChange={handleLocationChange}
           />
         </main>
       </div>
