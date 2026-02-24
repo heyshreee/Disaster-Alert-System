@@ -20,9 +20,20 @@
 }
 
 body {
-  background-color: var(--bg-color);
-  color: var(--text-main);
+  background-color: #0f172a;
+  color: #f8fafc;
   overflow: hidden;
+}
+
+/* Fix Leaflet Tile Misalignment */
+.leaflet-tile {
+  max-width: none !important;
+  max-height: none !important;
+  visibility: inherit !important;
+}
+
+.leaflet-container {
+  background: #0f172a !important;
 }
 
 #root {
@@ -63,15 +74,15 @@ body {
 }
 
 .sidebar {
-  width: 420px;
-  background: var(--panel-bg);
+  width: 480px;
+  background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-right: 1px solid var(--glass-border);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   z-index: 500;
-  box-shadow: 4px 0 30px rgba(0, 0, 0, 0.5);
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
 }
 
 .sidebar-header {
@@ -186,42 +197,76 @@ body {
 }
 
 .alert-card {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
   padding: 1.25rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   position: relative;
   overflow: hidden;
+  color: #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  min-height: 80px;
+  backdrop-filter: blur(8px);
 }
 
-.alert-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-}
-
-.alert-card.risk-High::before {
-  background: var(--risk-high);
-}
-
-.alert-card.risk-Medium::before {
-  background: var(--risk-medium);
-}
-
-.alert-card.risk-Low::before {
-  background: var(--risk-low);
+.alert-card:nth-child(even) {
+  background: rgba(15, 23, 42, 0.4);
 }
 
 .alert-card:hover {
-  transform: translateY(-4px);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.4);
+  transform: translateX(4px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.alert-content-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.pin-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.alert-main-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.time-text {
+  color: #3b82f6;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-right: 0.5rem;
+}
+
+.magnitude-text {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.place-name {
+  margin-top: 0.15rem;
+}
+
+.location-link {
+  color: #3b82f6;
+  text-decoration: none;
+  font-size: 0.85rem;
+  transition: color 0.2s;
+}
+
+.location-link:hover {
+  text-decoration: underline;
+  color: #2563eb;
 }
 
 .alert-header {
@@ -296,22 +341,19 @@ body {
 .map-container {
   flex: 1;
   position: relative;
-  background: #000;
-  z-index: 1;
+  background: #0f172a;
+  z-index: 10;
+  height: calc(100vh - 70px);
+  overflow: hidden;
 }
 
 .leaflet-container {
   width: 100%;
   height: 100%;
+  background: #0f172a;
 }
 
-/* Dark mode map tiles override (if using standard tiles) */
-.leaflet-layer,
-.leaflet-control-zoom-in,
-.leaflet-control-zoom-out,
-.leaflet-control-attribution {
-  filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
-}
+/* Removed dark mode override for simple light map */
 
 .empty-state {
   display: flex;
@@ -404,33 +446,41 @@ body {
 }
 
 .leaflet-popup-content-wrapper {
-  background: var(--panel-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  color: var(--text-main);
-  border: 1px solid var(--glass-border);
+  background: #1e293b !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  padding: 0;
 }
 
 .leaflet-popup-tip {
-  background: var(--panel-bg);
-  border: 1px solid var(--glass-border);
+  background: #1e293b !important;
+}
+
+.popup-content {
+  padding: 1rem;
 }
 
 .popup-content h3 {
   margin: 0 0 0.5rem 0;
   font-size: 1rem;
   font-weight: 600;
+  color: #ffffff;
 }
 
 .popup-content p {
   margin: 0.25rem 0;
-  color: var(--text-muted);
+  color: #94a3b8;
   font-size: 0.85rem;
 }
 
 .popup-content span {
-  color: var(--text-main);
+  color: #f1f5f9;
   font-weight: 500;
+}
+
+.popup-content .risk-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
 }
